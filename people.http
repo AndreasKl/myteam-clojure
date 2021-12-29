@@ -1,0 +1,14 @@
+### POST a new person
+POST localhost:8080/people/
+Content-Type: application/json
+
+{
+  "first_name": "Andreas",
+  "middle_name": "Junior",
+  "last_name": "Kluth"
+}
+
+### GET all
+GET localhost:8080/people/
+Content-Type: application/json
+

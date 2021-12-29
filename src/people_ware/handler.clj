@@ -3,12 +3,12 @@
   (:require [compojure.core :refer :all]
             [compojure.route :as route]
             [compojure.coercions :as coercions]
-            [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
+            [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
+            [ring.middleware.json :as ring-json]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
             [cheshire.core :as json]
-            [compojure.response :as response])
-  (:import (org.eclipse.jetty.server Server)))
+            [compojure.response :as response]))
 
 (def db-config
   {
@@ -18,7 +18,8 @@
    :user     "test"
    :password "test"})
 
-(def db-datasource (jdbc/get-datasource db-config))
+(def db-datasource
+  (jdbc/get-datasource db-config))
 
 (defn connect-with-close [consumer]
   (with-open [connection (jdbc/get-connection db-datasource)]
@@ -44,21 +45,21 @@
 
 (defroutes app-routes
            (context "/people" []
-             (GET "/" []
-               (json/generate-string {:people (load-people)}))
-             (POST "/" [request]
-               (json/generate-string (save-person (json/parse-string (slurp (:body request))))))
+             (GET "/" [_] {:body {:people (load-people)} :headers {"Content-Type" "application/json"}})
+             (POST "/" req {:status 201 :body (save-person (:body req)) :headers {"Content-Type" "application/json"}})
              (GET "/:id" [id :<< coercions/as-int]
                (let [person (load-person id)]
                  (if person
-                   (json/generate-string person)
+                   {:body person :headers {"Content-Type" "application/json"}}
                    {:status 404 :headers {"Content-Type" "text/html"} :body "Not Found"}))))
            (route/not-found "Not Found"))
 
 (def app
-  (wrap-defaults #'app-routes site-defaults))
+  (-> (wrap-defaults #'app-routes api-defaults)
+      (ring-json/wrap-json-body {:keywords? true :bigdecimals? true})
+      (ring-json/wrap-json-response)))
 
-(defonce ^Server server (atom nil))
+(defonce server (atom nil))
 
 (defn start []
   (let [jetty (run-jetty app {:port 8080 :join? false})]
